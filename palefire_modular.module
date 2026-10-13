@@ -1,0 +1,191 @@
+<?php
+
+/**
+ * @file
+ * Palefire modular pages: section attributes, snap mode, TOC, bento, carousel.
+ *
+ * Every preprocess returns early unless Palefire is the active theme, so
+ * Origami renders exactly as it does today.
+ */
+
+declare(strict_types=1);
+
+use Drupal\Component\Utility\Html;
+use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\node\NodeInterface;
+use Drupal\palefire_modular\ModularSections;
+use Drupal\paragraphs\ParagraphInterface;
+use Drupal\views\Views;
+
+/**
+ * The bento view and the exposed fulltext filter identifier every display
+ * shares. The identifier matches Origami's #edit-search-api-fulltext-bento.
+ */
+const PALEFIRE_MODULAR_BENTO_VIEW = 'bento_discovery';
+const PALEFIRE_MODULAR_BENTO_IDENTIFIER = 'search_api_fulltext_bento';
+
+/**
+ * Implements hook_theme().
+ */
+function palefire_modular_theme(): array {
+  return [
+    'palefire_modular_toc' => [
+      'variables' => ['items' => [], 'heading' => NULL, 'depth' => 1, 'mode' => 'page'],
+    ],
+  ];
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for html.
+ *
+ * Adds pf-snap-mandatory or pf-snap-proximity to <html> and the
+ * modular mode to <body>.
+ */
+function palefire_modular_preprocess_html(array &$variables): void {
+  if (!ModularSections::isPalefire() || !($node = ModularSections::currentNode())) {
+    return;
+  }
+  $sections = ModularSections::describe($node);
+  if ($mode = ModularSections::snapMode($sections)) {
+    $variables['html_attributes']->addClass('pf-snap', 'pf-snap-' . $mode);
+  }
+  $variables['attributes']['class'][] = 'modular--' . Html::getClass(ModularSections::mode($node));
+  CacheableMetadata::createFromRenderArray($variables)->addCacheableDependency($node)->applyTo($variables);
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for field.
+ *
+ * Turns each field_scroll_section item into a <section> with a stable id,
+ * snap/height/theme classes and a heading the TOC can point at.
+ */
+function palefire_modular_preprocess_field(array &$variables): void {
+  if ($variables['field_name'] !== ModularSections::FIELD || !ModularSections::isPalefire()) {
+    return;
+  }
+  $node = $variables['element']['#object'] ?? NULL;
+  if (!$node instanceof NodeInterface) {
+    return;
+  }
+  $sections = ModularSections::describe($node);
+
+  $index = 0;
+  foreach ($variables['items'] as &$item) {
+    $paragraph = $item['content']['#paragraph'] ?? NULL;
+    $section = $paragraph instanceof ParagraphInterface ? ($sections[$paragraph->id()] ?? NULL) : NULL;
+    if (!$section) {
+      continue;
+    }
+    $index++;
+    $item['attributes']
+      ->setAttribute('id', $section['id'])
+      ->setAttribute('data-section-index', (string) $index)
+      ->setAttribute('data-section-theme', $section['theme'])
+      ->setAttribute('aria-labelledby', $section['id'] . '-title')
+      ->addClass(
+        'pf-section',
+        'pf-section--' . Html::getClass($section['bundle']),
+        'pf-section--' . ($section['height'] === 'screen' ? 'screen' : 'auto'),
+        'pf-section--theme-' . Html::getClass($section['theme']),
+      );
+    if ($section['snap']) {
+      $item['attributes']->addClass('pf-section--snap');
+    }
+    if ($section['bg'] !== '') {
+      $item['attributes']->setAttribute('data-bg', $section['bg']);
+    }
+    $item['section'] = $section + [
+      'title_id' => $section['id'] . '-title',
+      // The bento section labels itself with its search form, so its
+      // heading is kept for screen readers and the outline only.
+      'title_hidden' => $section['bundle'] === 'bento_search',
+    ];
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for paragraph--bento-search.
+ *
+ * One search form, one tile per block display of the bento view. Every
+ * display reads the same exposed identifier from the query string, so a
+ * plain GET submit filters all tiles at once with no JavaScript. Palefire's
+ * bento-search.js upgrades this to Views AJAX.
+ */
+function palefire_modular_preprocess_paragraph__bento_search(array &$variables): void {
+  if (!ModularSections::isPalefire()) {
+    return;
+  }
+  $paragraph = $variables['paragraph'];
+  $request = \Drupal::request();
+  $query = trim((string) $request->query->get(PALEFIRE_MODULAR_BENTO_IDENTIFIER, ''));
+
+  $tiles = [];
+  $view = Views::getView(PALEFIRE_MODULAR_BENTO_VIEW);
+  if ($view) {
+    $displays = $view->storage->get('display');
+    uasort($displays, static fn (array $a, array $b): int => ($a['position'] ?? 0) <=> ($b['position'] ?? 0));
+    foreach ($displays as $display_id => $display) {
+      $disabled = isset($display['display_options']['enabled']) && !$display['display_options']['enabled'];
+      if (($display['display_plugin'] ?? '') !== 'block' || $disabled) {
+        continue;
+      }
+      $tiles[] = [
+        'id' => $display_id,
+        'title' => $display['display_title'] ?? $display_id,
+        'heading_id' => Html::getUniqueId('bento-' . $display_id),
+        'view' => [
+          '#type' => 'view',
+          '#name' => PALEFIRE_MODULAR_BENTO_VIEW,
+          '#display_id' => $display_id,
+          '#embed' => TRUE,
+        ],
+      ];
+    }
+  }
+
+  $placeholder = $paragraph->hasField('field_bento_placeholder') && !$paragraph->get('field_bento_placeholder')->isEmpty()
+    ? (string) $paragraph->get('field_bento_placeholder')->value
+    : (string) t('Search books, articles, databases, guides and more');
+
+  $variables['bento'] = [
+    'view_name' => PALEFIRE_MODULAR_BENTO_VIEW,
+    'identifier' => PALEFIRE_MODULAR_BENTO_IDENTIFIER,
+    'input_id' => Html::getUniqueId('pf-bento-q'),
+    'query' => $query,
+    'placeholder' => $placeholder,
+    'action' => $request->getPathInfo(),
+    'tiles' => $tiles,
+  ];
+  $variables['#cache']['contexts'][] = 'url.query_args:' . PALEFIRE_MODULAR_BENTO_IDENTIFIER;
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for paragraph--events-carousel.
+ *
+ * Renders the libcal_gantt_carousel block plugin inside the paragraph.
+ * Optional paragraph fields override the block defaults.
+ */
+function palefire_modular_preprocess_paragraph__events_carousel(array &$variables): void {
+  if (!\Drupal::moduleHandler()->moduleExists('libcal_gantt_carousel')) {
+    $variables['carousel'] = [];
+    return;
+  }
+  /** @var \Drupal\paragraphs\ParagraphInterface $paragraph */
+  $paragraph = $variables['paragraph'];
+  $config = [];
+  $map = [
+    'field_carousel_days' => 'max_days',
+    'field_carousel_calendar' => 'calendar',
+    'field_carousel_interval' => 'interval',
+  ];
+  foreach ($map as $field => $key) {
+    if ($paragraph->hasField($field) && !$paragraph->get($field)->isEmpty()) {
+      $config[$key] = $paragraph->get($field)->value;
+    }
+  }
+  $block = \Drupal::service('plugin.manager.block')->createInstance('libcal_gantt_day_carousel', $config);
+  $variables['carousel'] = $block->build();
+  CacheableMetadata::createFromRenderArray($variables)
+    ->merge(CacheableMetadata::createFromObject($block))
+    ->applyTo($variables);
+}

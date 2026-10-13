@@ -1,0 +1,8 @@
+name: 'Palefire Modular Pages'
+type: module
+description: 'Section anchors, scroll-snap flags and the live table of contents for the modular_page content type (Palefire only).'
+package: Custom
+core_version_requirement: ^10.2 || ^11
+dependencies:
+  - drupal:node
+  - paragraphs:paragraphs
