@@ -57,7 +57,8 @@ function palefire_modular_preprocess_html(array &$variables): void {
  * Implements hook_preprocess_HOOK() for field.
  *
  * Turns each field_scroll_section item into a <section> with a stable id,
- * snap/height/theme classes and a heading the TOC can point at.
+ * snap/height/theme classes, an optional background image and a heading
+ * the TOC can point at.
  */
 function palefire_modular_preprocess_field(array &$variables): void {
   if ($variables['field_name'] !== ModularSections::FIELD || !ModularSections::isPalefire()) {
@@ -91,10 +92,21 @@ function palefire_modular_preprocess_field(array &$variables): void {
     if ($section['snap']) {
       $item['attributes']->addClass('pf-section--snap');
     }
-    if ($section['bg'] !== '') {
-      $item['attributes']->setAttribute('data-bg', $section['bg']);
+
+    // Background image: a decorative responsive <img> printed behind the
+    // section content by the field template. Its cache metadata goes on the
+    // item either way, so publishing or swapping the media updates the page.
+    $bg = ModularSections::background($paragraph);
+    CacheableMetadata::createFromRenderArray($item['content'])
+      ->merge(CacheableMetadata::createFromRenderArray($bg))
+      ->applyTo($item['content']);
+    $has_bg = ModularSections::hasItems($bg);
+    if ($has_bg) {
+      $item['attributes']->addClass('pf-section--has-bg');
     }
+
     $item['section'] = $section + [
+      'bg' => $has_bg ? $bg : NULL,
       'title_id' => $section['id'] . '-title',
       // The bento section labels itself with its search form, so its
       // heading is kept for screen readers and the outline only.

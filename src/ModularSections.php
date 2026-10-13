@@ -6,6 +6,7 @@ namespace Drupal\palefire_modular;
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Render\Element;
 use Drupal\node\NodeInterface;
 use Drupal\paragraphs\ParagraphInterface;
 
@@ -24,12 +25,19 @@ final class ModularSections {
   public const THEME = 'palefire';
 
   /**
+   * The background image field, and the name shared by the media view mode
+   * and the responsive image style used to render it.
+   */
+  public const BG_FIELD = 'field_section_bg';
+  public const BG_STYLE = 'section_background';
+
+  /**
    * Ids that would collide with ids the page itself uses.
    */
   private const RESERVED_IDS = ['main', 'main-content', 'header', 'footer', 'page', 'top', 'toc'];
 
   /**
-   * @return array<int|string, array{id: string, label: string, bundle: string, snap: bool, height: string, theme: string, toc: bool, bg: string, delta: int}>
+   * @return array<int|string, array{id: string, label: string, bundle: string, snap: bool, height: string, theme: string, toc: bool, delta: int}>
    *   Keyed by paragraph id, in field order. Unpublished and inaccessible
    *   paragraphs are left out, matching what is rendered.
    */
@@ -66,7 +74,6 @@ final class ModularSections {
           'height' => self::text($paragraph, 'field_section_height') ?: 'auto',
           'theme' => self::text($paragraph, 'field_section_theme') ?: 'light',
           'toc' => $label !== '' && !self::bool($paragraph, 'field_section_toc_hide'),
-          'bg' => self::imageUrl($paragraph, 'field_section_bg'),
           'delta' => (int) $delta,
         ];
       }
@@ -131,17 +138,41 @@ final class ModularSections {
     return $entity->hasField($field) && !$entity->get($field)->isEmpty() && (bool) $entity->get($field)->value;
   }
 
-  private static function imageUrl(FieldableEntityInterface $entity, string $field): string {
-    if (!$entity->hasField($field) || $entity->get($field)->isEmpty()) {
-      return '';
+  /**
+   * Render array for a section's background image.
+   *
+   * A Media reference renders in the "section_background" media view mode,
+   * which should use the "section_background" responsive image style. A
+   * plain Image field uses that responsive image style directly, or the
+   * original image if Responsive Image or the style is missing.
+   *
+   * The result is always returned, even when it has no visible items (for
+   * example, unpublished media), so its cache metadata can still bubble.
+   * Use hasItems() to decide whether to print it.
+   */
+  public static function background(ParagraphInterface $paragraph): array {
+    if (!$paragraph->hasField(self::BG_FIELD) || $paragraph->get(self::BG_FIELD)->isEmpty()) {
+      return [];
     }
-    $file = $entity->get($field)->entity;
-    // Media reference: use the media item's source file.
-    if ($file && $file->getEntityTypeId() === 'media') {
-      $source = $file->getSource()->getSourceFieldValue($file);
-      $file = $source ? \Drupal::entityTypeManager()->getStorage('file')->load($source) : NULL;
+    $items = $paragraph->get(self::BG_FIELD);
+    if ($items->getFieldDefinition()->getType() === 'image') {
+      $responsive = \Drupal::moduleHandler()->moduleExists('responsive_image')
+        && \Drupal::entityTypeManager()->getStorage('responsive_image_style')->load(self::BG_STYLE);
+      $display = $responsive
+        ? ['type' => 'responsive_image', 'settings' => ['responsive_image_style' => self::BG_STYLE, 'image_link' => '']]
+        : ['type' => 'image', 'settings' => ['image_style' => '', 'image_link' => '']];
     }
-    return $file && method_exists($file, 'createFileUrl') ? $file->createFileUrl() : '';
+    else {
+      $display = ['type' => 'entity_reference_entity_view', 'settings' => ['view_mode' => self::BG_STYLE, 'link' => FALSE]];
+    }
+    return $items->view($display + ['label' => 'hidden']);
+  }
+
+  /**
+   * TRUE when a field render array has at least one item to show.
+   */
+  public static function hasItems(array $build): bool {
+    return (bool) Element::children($build);
   }
 
 }

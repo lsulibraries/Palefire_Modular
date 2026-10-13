@@ -29,6 +29,8 @@ Origami pages don't use.
   the bento search section).
 * `libcal_gantt_carousel` (only needed for the events carousel section).
   If that module isn't enabled, the section renders empty.
+* Media and the core Responsive Image module (only needed for section
+  background images). See "Background images" below.
 * The Palefire theme files from this kit: the templates, the `modular`,
   `modular-toc` and `bento-search` libraries, and the `modular_sidebar`
   region.
@@ -38,7 +40,9 @@ Origami pages don't use.
 1. Copy this folder to `web/modules/custom/palefire_modular`.
 2. Run `drush en palefire_modular -y && drush cr`.
 3. Create the paragraph fields and types listed below.
-4. In Palefire, place the "Modular page: table of contents" block in the
+4. If you use section backgrounds, set up the image styles, responsive
+   image style and media view mode under "Background images".
+5. In Palefire, place the "Modular page: table of contents" block in the
    `modular_sidebar` region.
 
 ## Content model
@@ -64,7 +68,7 @@ because the code checks `hasField()` before reading each one.
 | `field_section_height` | List: `auto`, `screen` | `auto` fits the content. `screen` fills the viewport under the header. |
 | `field_section_theme` | List: `light`, `dark` | Adds `pf-section--theme-{value}` |
 | `field_section_toc_hide` | Boolean | Leaves a titled section out of the TOC |
-| `field_section_bg` | Image, or Media (image) | Outputs as `data-bg` for the background crossfade |
+| `field_section_bg` | Entity reference → Media, Image type only (or Image) | Decorative responsive image behind the section. See "Background images". |
 
 ### Section paragraph types
 
@@ -108,6 +112,74 @@ page already uses: `main`, `main-content`, `header`, `footer`, `page`,
 
 Unpublished paragraphs, and paragraphs the current user can't view, are
 skipped. Because of that, the TOC always matches what is rendered.
+
+### Background images
+
+When `field_section_bg` has an image, the module renders it and the
+section template prints it first inside the section:
+
+```html
+<section id="hours-and-events" class="pf-section … pf-section--has-bg">
+  <div class="pf-section__bg" aria-hidden="true" inert>
+    <img srcset="…768w, …1280w, …1920w, …2560w" sizes="…" alt="…" loading="lazy">
+  </div>
+  <div class="pf-section__inner">…</div>
+</section>
+```
+
+The image is decorative, so its wrapper is `aria-hidden` and `inert`.
+`_modular.scss` lays it behind the content with `object-fit: cover` and
+adds a scrim so text stays readable: a light wash on `light` sections,
+a dark one on `dark` sections. Override `--pf-section-scrim` or
+`--pf-section-bg-position` to tune either.
+
+How the field is rendered depends on its type:
+
+| Field type | Rendered with |
+| --- | --- |
+| Media reference | The `section_background` media view mode |
+| Image | The `section_background` responsive image style, or the original image if Responsive Image or that style is missing |
+
+Rendering goes through Drupal's normal formatters, so access is checked
+and cache tags bubble. Unpublished media won't show, and replacing an
+image updates the page. Anonymous users need the "View media" permission.
+
+#### One-time setup
+
+1. Enable Responsive Image: `drush en responsive_image -y`.
+2. At Configuration → Media → Image styles, add four styles. Each one
+   gets a single Scale effect with upscaling off:
+
+   | Machine name | Width |
+   | --- | --- |
+   | `section_bg_768` | 768 |
+   | `section_bg_1280` | 1280 |
+   | `section_bg_1920` | 1920 |
+   | `section_bg_2560` | 2560 |
+
+   You can add a Convert → WebP effect to each one if the server's image
+   toolkit supports WebP.
+3. At Configuration → Media → Responsive image styles, add one with
+   machine name `section_background`:
+   * Breakpoint group: Responsive Image.
+   * 1x Viewport Sizing: "Select multiple image styles and use the sizes
+     attribute".
+   * Sizes: `(max-aspect-ratio: 1/1) 180vh, 100vw`. Full-screen sections
+     on portrait phones crop a wide image, so the browser needs a wider
+     file than the viewport width.
+   * Image styles: check all four `section_bg_*` styles.
+   * Fallback image style: `section_bg_1280`.
+4. At Structure → Display modes → View modes, add a Media view mode with
+   machine name `section_background`.
+5. On the Image media type, go to Manage display → Custom display
+   settings and enable Section background. On that display:
+   * Image field: Responsive image formatter, style
+     `section_background`, no link, label hidden. Loading: lazy, unless
+     the first section on a page has a background, in which case use eager.
+   * Every other field: Disabled.
+6. On each paragraph type, leave `field_section_bg` set to Disabled in
+   Manage display. The module renders it, not the paragraph.
+7. Run `drush cr`.
 
 ### Scroll-snap mode
 
@@ -203,6 +275,8 @@ All machine names are constants:
 | `ModularSections::FIELD` | `src/ModularSections.php` | `field_scroll_section` |
 | `ModularSections::MODE_FIELD` | `src/ModularSections.php` | `field_modular_type` |
 | `ModularSections::THEME` | `src/ModularSections.php` | `palefire` |
+| `ModularSections::BG_FIELD` | `src/ModularSections.php` | `field_section_bg` |
+| `ModularSections::BG_STYLE` | `src/ModularSections.php` | `section_background` (media view mode and responsive image style) |
 | `PALEFIRE_MODULAR_BENTO_VIEW` | `palefire_modular.module` | `bento_discovery` |
 | `PALEFIRE_MODULAR_BENTO_IDENTIFIER` | `palefire_modular.module` | `search_api_fulltext_bento` |
 
@@ -241,6 +315,9 @@ palefire_modular/
 | No snapping | `<html>` has a `pf-snap-*` class. `css/modular.css` is compiled and attached. |
 | Sections have no ids | Palefire is the active theme. Run `drush cr` after adding the field template. |
 | Bento tiles don't filter | Every display uses the identifier `search_api_fulltext_bento`. Use AJAX is on. |
+| Background image missing | The media item is published. Anonymous users have "View media". `.pf-section--has-bg` is on the section. Run `drush cr`. |
+| Background shows the media name or the wrong size | The Image media type has the `section_background` view mode enabled under Custom display settings, using the Responsive image formatter. Without it, Drupal falls back to the default display. |
+| Background is blurry on phones | The `section_background` sizes value includes the `180vh` portrait rule and the 2560 style. |
 | Carousel is empty | `libcal_gantt_carousel` is enabled. Show weather and the LibCal credentials are set in libcal_gantt. |
 
 ## Status and known gaps
@@ -250,5 +327,8 @@ palefire_modular/
 * `info.yml` doesn't list `drupal:views` as a dependency, even though the
   bento preprocess calls `Views::getView()`. Add it if Views might ever be
   turned off.
+* Background rendering assumes the Image media type's source field holds
+  an image, which is the standard setup. Don't allow other media types
+  in `field_section_bg`.
 * Section descriptions are cached in `drupal_static()` for the rest of
   the request, keyed by node id and revision id.
