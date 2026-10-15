@@ -86,7 +86,7 @@ function palefire_modular_preprocess_field(array &$variables): void {
       ->addClass(
         'pf-section',
         'pf-section--' . Html::getClass($section['bundle']),
-        'pf-section--' . ($section['height'] === 'screen' ? 'screen' : 'auto'),
+        'pf-section--' . (in_array($section['height'], ['screen', 'peek'], TRUE) ? $section['height'] : 'auto'),
         'pf-section--theme-' . Html::getClass($section['theme']),
       );
     if ($section['snap']) {
