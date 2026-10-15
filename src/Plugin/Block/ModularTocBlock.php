@@ -76,16 +76,18 @@ class ModularTocBlock extends BlockBase {
           }
         }
         if ($items) {
-          $build = [
-            '#theme' => 'palefire_modular_toc',
-            '#items' => $items,
-            '#heading' => $c['heading'],
-            '#depth' => in_array($mode, $c['deep_modes'], TRUE) ? 2 : 1,
-            '#mode' => $mode,
-          ];
-          if (ModularSections::isPalefire()) {
-            $build['#attached']['library'][] = 'palefire/modular-toc';
-          }
+$build = [
+  '#theme' => 'palefire_modular_toc',
+  '#items' => $items,
+  '#heading' => $c['heading'],
+  '#depth' => in_array($mode, $c['deep_modes'], TRUE) ? 2 : 1,
+  '#mode' => $mode,
+];
+if (ModularSections::isPalefire()) {
+  $build['#attached']['library'][] = 'palefire/modular-toc';
+}
+
+        }
       }
     }
 
