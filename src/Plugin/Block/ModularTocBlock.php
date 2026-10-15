@@ -83,7 +83,9 @@ class ModularTocBlock extends BlockBase {
             '#depth' => in_array($mode, $c['deep_modes'], TRUE) ? 2 : 1,
             '#mode' => $mode,
           ];
-        }
+          if (ModularSections::isPalefire()) {
+            $build['#attached']['library'][] = 'palefire/modular-toc';
+          }
       }
     }
 
