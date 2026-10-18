@@ -75,7 +75,7 @@ because the code checks `hasField()` before reading each one.
 | Paragraph type | Optional fields | Notes |
 | --- | --- | --- |
 | `bento_search` | `field_bento_placeholder` | Its `<h2>` is visually hidden, because the search form labels the section |
-| `events_carousel` | `field_carousel_days` (integer), `field_carousel_calendar` (libcal_gantt calendar key), `field_carousel_interval` (ms, `0` = no autoplay) | Embeds the `libcal_gantt_day_carousel` block |
+| `events_carousel` | `field_carousel_days` (integer), `field_carousel_calendar` (libcal_gantt calendar key), `field_carousel_interval` (ms, `0` = no autoplay), `field_carousel_event_days` (boolean, "Show only event days") | Embeds the `libcal_gantt_day_carousel` block |
 | Link Cards: Standard and any others | none | Pick up the shared section behaviour automatically |
 
 ## What it does
@@ -261,6 +261,30 @@ block settings like this:
 | `field_carousel_days` | `max_days` |
 | `field_carousel_calendar` | `calendar` |
 | `field_carousel_interval` | `interval` |
+| `field_carousel_event_days` | `only_event_days` |
+
+#### Show only event days (2026-10-18)
+
+`field_carousel_event_days` (Boolean, label "Show only event days") skips
+days that have no events, or only all-day events (a donation bin, an open
+room). It uses the same all-day test as the slides' "All day" label.
+**Days** then counts event days: with Days = 7 you get the next 7 days that
+have a timed event. Days are searched only within the window the carousel
+already loads (libcal_gantt's weekday count, 10 by default, plus the
+weekends between them, about two weeks). A quiet fortnight therefore shows
+fewer slides, and with no event days at all the section reads "No upcoming
+events in the next two weeks." Weekends still follow the block's "Include
+Saturday and Sunday slides" setting. Days skipped this way never get an
+"On this day" fact, since those only appear on days without timed events.
+
+Needs the matching `only_event_days` option in `libcal_gantt_carousel`
+(libcal_gantt, 2026-10-18 or later). Older versions ignore the field.
+
+Add it on production in Field UI: **Structure → Paragraph types → Events
+carousel → Manage fields → Create a new field → Boolean**, with label
+"Show only event days" and machine name `field_carousel_event_days`. Leave
+it unchecked by default, and use the "Single on/off checkbox" widget on the
+form display. Then hide it on Manage display, because the preprocess reads it.
 
 Weather, hours and event settings come from the libcal_gantt settings page
 at `/admin/config/services/libcal-gantt`.

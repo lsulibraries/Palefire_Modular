@@ -189,6 +189,8 @@ function palefire_modular_preprocess_paragraph__events_carousel(array &$variable
     'field_carousel_days' => 'max_days',
     'field_carousel_calendar' => 'calendar',
     'field_carousel_interval' => 'interval',
+    // Boolean: "Show only event days" (skip days with no timed events).
+    'field_carousel_event_days' => 'only_event_days',
   ];
   foreach ($map as $field => $key) {
     if ($paragraph->hasField($field) && !$paragraph->get($field)->isEmpty()) {
