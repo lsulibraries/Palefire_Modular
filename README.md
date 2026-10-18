@@ -75,7 +75,7 @@ because the code checks `hasField()` before reading each one.
 | Paragraph type | Optional fields | Notes |
 | --- | --- | --- |
 | `bento_search` | `field_bento_placeholder` | Its `<h2>` is visually hidden, because the search form labels the section |
-| `events_carousel` | `field_carousel_days` (integer), `field_carousel_calendars` (list, checkboxes: one or more LibCal Gantt calendars), `field_carousel_calendar` (older single calendar key, text), `field_carousel_interval` (ms, `0` = no autoplay), `field_carousel_event_days` (boolean, "Show only event days") | Embeds the `libcal_gantt_day_carousel` block |
+| `events_carousel` | `field_carousel_days` (integer), `field_carousel_calendars` (list, checkboxes: one or more LibCal Gantt calendars), `field_carousel_campuses` (list, checkboxes: only these libraries), `field_carousel_calendar` (older single calendar key, text), `field_carousel_interval` (ms, `0` = no autoplay), `field_carousel_event_days` (boolean, "Show only event days") | Embeds the `libcal_gantt_day_carousel` block |
 | Link Cards: Standard and any others | none | Pick up the shared section behaviour automatically |
 
 ## What it does
@@ -261,6 +261,7 @@ block settings like this:
 | `field_carousel_days` | `max_days` |
 | `field_carousel_calendars` | `calendar` (ticked keys joined with commas) |
 | `field_carousel_calendar` | `calendar` (only when no Calendars box is ticked) |
+| `field_carousel_campuses` | `campus` (ticked campus IDs joined with commas) |
 | `field_carousel_interval` | `interval` |
 | `field_carousel_event_days` | `only_event_days` |
 
@@ -294,6 +295,31 @@ key.
 
 Once every carousel uses the checkboxes, the old `field_carousel_calendar`
 can be deleted in Field UI. The code skips it when it's gone.
+
+#### Libraries: only some campuses (2026-10-18)
+
+`field_carousel_campuses` is the carousel's version of the "LSU Libraries"
+filter on the LibCal calendar (`cm=262` = Hill Memorial Library). There's
+one checkbox per library in **Campus rows** on the LibCal Gantt settings
+page, labelled "Hill Memorial Library (262)" and so on, read live by
+`palefire_modular_carousel_campus_options()`.
+
+- **Ticked:** only those libraries' events are shown, their online events
+  included, as on LibCal. Each slide's building hours are limited to them.
+- **Nothing ticked:** every library, as before.
+
+It works together with Calendars: tick the Events calendar and Hill Memorial
+Library to get what `cm=262` shows on LibCal. It needs `libcal_gantt`
+2026-10-18 or later, whose carousel endpoint reads `?campus=`.
+
+The same script creates it. Re-running it on a site that already has the
+Calendars field only adds the new one:
+
+```sh
+git pull
+drush php:script scripts/carousel_calendars_setup.php
+drush cr
+```
 
 #### Show only event days (2026-10-18)
 

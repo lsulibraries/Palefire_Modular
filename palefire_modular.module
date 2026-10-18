@@ -205,6 +205,11 @@ function palefire_modular_preprocess_paragraph__events_carousel(array &$variable
   if ($paragraph->hasField('field_carousel_calendars') && !$paragraph->get('field_carousel_calendars')->isEmpty()) {
     $config['calendar'] = implode(',', array_column($paragraph->get('field_carousel_calendars')->getValue(), 'value'));
   }
+  // Libraries (checkboxes): only events from these campuses, like LibCal's
+  // "LSU Libraries" filter. None ticked shows every library.
+  if ($paragraph->hasField('field_carousel_campuses') && !$paragraph->get('field_carousel_campuses')->isEmpty()) {
+    $config['campus'] = implode(',', array_column($paragraph->get('field_carousel_campuses')->getValue(), 'value'));
+  }
   $block = \Drupal::service('plugin.manager.block')->createInstance('libcal_gantt_day_carousel', $config);
   $variables['carousel'] = $block->build();
   CacheableMetadata::createFromRenderArray($variables)
@@ -236,6 +241,32 @@ function palefire_modular_carousel_calendar_options(FieldStorageDefinitionInterf
   $raw = (string) \Drupal::config('libcal_gantt.settings')->get('calendars');
   foreach (LibCalClient::parseCalendars($raw) as $key => $calendar) {
     $options[(string) $key] = $calendar['label'] . ' (' . implode(', ', $calendar['ids']) . ')';
+  }
+  return $options;
+}
+
+/**
+ * Allowed values for field_carousel_campuses.
+ *
+ * The libraries from "Campus rows" on the LibCal Gantt settings page, keyed
+ * by LibCal campus ID (the cm= of LibCal's "LSU Libraries" filter, e.g.
+ * 262 = Hill Memorial Library). Read live, like the calendar options.
+ *
+ * Set as the field storage's allowed_values_function by
+ * scripts/carousel_calendars_setup.php.
+ *
+ * @return array<string, string>
+ *   Campus ID => "Label (ID)".
+ */
+function palefire_modular_carousel_campus_options(FieldStorageDefinitionInterface $definition, ?FieldableEntityInterface $entity = NULL, bool &$cacheable = TRUE): array {
+  $cacheable = FALSE;
+  if (!class_exists(LibCalClient::class)) {
+    return [];
+  }
+  $options = [];
+  $raw = (string) \Drupal::config('libcal_gantt.settings')->get('campus_rows');
+  foreach (LibCalClient::parseCampusRows($raw) as $id => $label) {
+    $options[(string) $id] = $label . ' (' . $id . ')';
   }
   return $options;
 }
