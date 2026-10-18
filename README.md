@@ -75,7 +75,7 @@ because the code checks `hasField()` before reading each one.
 | Paragraph type | Optional fields | Notes |
 | --- | --- | --- |
 | `bento_search` | `field_bento_placeholder` | Its `<h2>` is visually hidden, because the search form labels the section |
-| `events_carousel` | `field_carousel_days` (integer), `field_carousel_calendar` (libcal_gantt calendar key), `field_carousel_interval` (ms, `0` = no autoplay), `field_carousel_event_days` (boolean, "Show only event days") | Embeds the `libcal_gantt_day_carousel` block |
+| `events_carousel` | `field_carousel_days` (integer), `field_carousel_calendars` (list, checkboxes: one or more LibCal Gantt calendars), `field_carousel_calendar` (older single calendar key, text), `field_carousel_interval` (ms, `0` = no autoplay), `field_carousel_event_days` (boolean, "Show only event days") | Embeds the `libcal_gantt_day_carousel` block |
 | Link Cards: Standard and any others | none | Pick up the shared section behaviour automatically |
 
 ## What it does
@@ -259,9 +259,41 @@ block settings like this:
 | Paragraph field | Block setting |
 | --- | --- |
 | `field_carousel_days` | `max_days` |
-| `field_carousel_calendar` | `calendar` |
+| `field_carousel_calendars` | `calendar` (ticked keys joined with commas) |
+| `field_carousel_calendar` | `calendar` (only when no Calendars box is ticked) |
 | `field_carousel_interval` | `interval` |
 | `field_carousel_event_days` | `only_event_days` |
+
+#### Calendars: one or several (2026-10-18)
+
+`field_carousel_calendars` gives editors one checkbox per calendar tab
+from **Calendars** on `/admin/config/services/libcal-gantt`, labelled
+"Events (8030)" and so on. Tick one calendar for its events only, or tick
+several to merge them into one carousel. If nothing is ticked, the older
+`field_carousel_calendar` text key is used when it has a value, and
+otherwise the first calendar.
+
+The options come from `palefire_modular_carousel_calendar_options()`, an
+`allowed_values_function`. It reads that setting each time, so adding or
+renaming a calendar there updates the checkboxes. Field UI can't set an
+allowed-values function, so create the field with the script, from this
+module's folder on production:
+
+```sh
+git pull
+drush cr
+drush php:script scripts/carousel_calendars_setup.php
+drush cr
+```
+
+The script adds the field, puts the checkboxes on the form next to the old
+Calendar key field, and keeps it out of the display. Merging several
+calendars needs `libcal_gantt` 2026-10-18 or later: its carousel endpoint
+reads a comma-separated `calendar` list. Older versions only use the first
+key.
+
+Once every carousel uses the checkboxes, the old `field_carousel_calendar`
+can be deleted in Field UI. The code skips it when it's gone.
 
 #### Show only event days (2026-10-18)
 

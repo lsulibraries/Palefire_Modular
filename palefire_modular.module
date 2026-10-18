@@ -12,6 +12,9 @@ declare(strict_types=1);
 
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
+use Drupal\libcal_gantt\Service\LibCalClient;
 use Drupal\node\NodeInterface;
 use Drupal\palefire_modular\ModularSections;
 use Drupal\paragraphs\ParagraphInterface;
@@ -197,9 +200,42 @@ function palefire_modular_preprocess_paragraph__events_carousel(array &$variable
       $config[$key] = $paragraph->get($field)->value;
     }
   }
+  // Calendars (checkboxes, one or more): merged into one carousel. Wins over
+  // the older single-key text field above when anything is ticked.
+  if ($paragraph->hasField('field_carousel_calendars') && !$paragraph->get('field_carousel_calendars')->isEmpty()) {
+    $config['calendar'] = implode(',', array_column($paragraph->get('field_carousel_calendars')->getValue(), 'value'));
+  }
   $block = \Drupal::service('plugin.manager.block')->createInstance('libcal_gantt_day_carousel', $config);
   $variables['carousel'] = $block->build();
   CacheableMetadata::createFromRenderArray($variables)
     ->merge(CacheableMetadata::createFromObject($block))
     ->applyTo($variables);
+}
+
+/**
+ * Allowed values for field_carousel_calendars.
+ *
+ * The calendar tabs from the "Calendars" setting on the LibCal Gantt
+ * settings page (/admin/config/services/libcal-gantt), keyed the way the
+ * carousel expects (each line's first calendar ID), so editors pick real
+ * calendars instead of typing keys. Not cacheable: editing that setting
+ * changes the list straight away.
+ *
+ * Set as the field storage's allowed_values_function by
+ * scripts/carousel_calendars_setup.php.
+ *
+ * @return array<string, string>
+ *   Calendar key => "Label (IDs)".
+ */
+function palefire_modular_carousel_calendar_options(FieldStorageDefinitionInterface $definition, ?FieldableEntityInterface $entity = NULL, bool &$cacheable = TRUE): array {
+  $cacheable = FALSE;
+  if (!class_exists(LibCalClient::class)) {
+    return [];
+  }
+  $options = [];
+  $raw = (string) \Drupal::config('libcal_gantt.settings')->get('calendars');
+  foreach (LibCalClient::parseCalendars($raw) as $key => $calendar) {
+    $options[(string) $key] = $calendar['label'] . ' (' . implode(', ', $calendar['ids']) . ')';
+  }
+  return $options;
 }
